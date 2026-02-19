@@ -19,10 +19,10 @@
     "vectors_per_tenant": 1000,
 
     "target_index_bulk_size": 100,
-    "indexing_clients": 32,
+    "indexing_clients": 4,
     "index_target_throughput": 10,
 
     "query_k": 100,
-    "search_clients": 32,
+    "search_clients": 4,
     "search_target_throughput": 0.1
 }
