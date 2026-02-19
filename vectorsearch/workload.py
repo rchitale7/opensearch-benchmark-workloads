@@ -88,7 +88,7 @@ class RandomSearchParamSource(ParamSource):
 
 class MultiTenantBulkParamSource(ParamSource):
     """Distributes bulk indexing across N tenant indexes with random vectors.
-    Tracks per-tenant doc counts and signals completion when all tenants reach vectors_per_tenant."""
+    Each client partition is assigned to a specific tenant for even distribution."""
 
     def __init__(self, workload, params, **kwargs):
         super().__init__(workload, params, **kwargs)
@@ -98,19 +98,18 @@ class MultiTenantBulkParamSource(ParamSource):
         self._field = params.get("field", "target_field")
         self._dims = params.get("dims", 256)
         self._vectors_per_tenant = params.get("vectors_per_tenant", 600000)
-        self._total_vectors = self._num_tenants * self._vectors_per_tenant
+        self._tenant_id = 0
         self._vectors_sent = 0
 
     def partition(self, partition_index, total_partitions):
+        self._tenant_id = partition_index % self._num_tenants
         return self
 
     def params(self):
-        if self._vectors_sent >= self._total_vectors:
+        if self._vectors_sent >= self._vectors_per_tenant:
             raise StopIteration()
 
-        tenant_id = random.randint(0, self._num_tenants - 1)
-        index_name = f"{self._index_prefix}_{tenant_id}"
-
+        index_name = f"{self._index_prefix}_{self._tenant_id}"
         bulk_data = []
         for _ in range(self._bulk_size):
             vec = np.random.rand(self._dims).tolist()
@@ -130,7 +129,8 @@ class MultiTenantBulkParamSource(ParamSource):
 
 
 class MultiTenantSearchParamSource(ParamSource):
-    """Distributes knn search queries across N tenant indexes with random query vectors."""
+    """Distributes knn search queries across N tenant indexes.
+    Each client partition is assigned to a specific tenant."""
 
     def __init__(self, workload, params, **kwargs):
         super().__init__(workload, params, **kwargs)
@@ -139,13 +139,14 @@ class MultiTenantSearchParamSource(ParamSource):
         self._dims = params.get("dims", 256)
         self._k = params.get("k", 100)
         self._field = params.get("field", "target_field")
+        self._tenant_id = 0
 
     def partition(self, partition_index, total_partitions):
+        self._tenant_id = partition_index % self._num_tenants
         return self
 
     def params(self):
-        tenant_id = random.randint(0, self._num_tenants - 1)
-        index_name = f"{self._index_prefix}_{tenant_id}"
+        index_name = f"{self._index_prefix}_{self._tenant_id}"
         query_vec = np.random.rand(self._dims).tolist()
 
         return {
