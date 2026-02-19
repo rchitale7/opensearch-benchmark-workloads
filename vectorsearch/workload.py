@@ -18,7 +18,7 @@ def register(registry):
     registry.register_param_source("multi-tenant-bulk-param-source", MultiTenantBulkParamSource)
     registry.register_param_source("multi-tenant-search-param-source", MultiTenantSearchParamSource)
     registry.register_param_source("multi-tenant-setup-param-source", MultiTenantSetupParamSource)
-    registry.register_runner("multi-tenant-create-indices", MultiTenantCreateIndicesRunner())
+    registry.register_runner("multi-tenant-create-indices", MultiTenantCreateIndicesRunner(), async_runner=True)
 
 
 class RandomBulkParamSource(ParamSource):
@@ -183,7 +183,10 @@ class MultiTenantSetupParamSource(ParamSource):
 class MultiTenantCreateIndicesRunner:
     """Creates N tenant indexes with knn vector field configuration."""
 
-    def __call__(self, opensearch, params):
+    async def __call__(self, opensearch, params):
+        from osbenchmark.client import RequestContextHolder
+        ctx = RequestContextHolder()
+
         num_tenants = params.get("num_tenants", 32)
         index_prefix = params.get("index_prefix", "tenant_index")
 
@@ -226,11 +229,10 @@ class MultiTenantCreateIndicesRunner:
 
         for i in range(num_tenants):
             index_name = f"{index_prefix}_{i}"
-            opensearch.indices.delete(index=index_name, ignore=[404])
-            opensearch.indices.create(
-                index=index_name,
-                body=index_settings
-            )
+            ctx.on_client_request_start()
+            await opensearch.indices.delete(index=index_name, ignore=[404])
+            await opensearch.indices.create(index=index_name, body=index_settings)
+            ctx.on_client_request_end()
 
         return {"success": True, "weight": 1, "unit": "ops"}
 
