@@ -1,0 +1,21 @@
+{
+    "operation": {
+        "name": "create-tenant-indices",
+        "operation-type": "multi-tenant-create-indices",
+        "param-source": "multi-tenant-setup-param-source",
+        "num_tenants": {{ num_tenants | default(32) | int }},
+        "index_prefix": "tenant_index",
+        "field": "{{ target_field_name | default('target_field') }}",
+        "dims": {{ target_index_dimension | default(256) | int }},
+        "target_index_primary_shards": {{ target_index_primary_shards | default(6) | int }},
+        "target_index_replica_shards": {{ target_index_replica_shards | default(2) | int }},
+        "target_index_space_type": "{{ target_index_space_type | default('innerproduct') }}",
+        "mode": "{{ mode | default('on_disk') }}",
+        "compression_level": "{{ compression_level | default('32x') }}",
+        "hnsw_ef_construction": {{ hnsw_ef_construction | default(512) | int }},
+        "hnsw_ef_search": {{ hnsw_ef_search | default(100) | int }},
+        "refresh_interval": "{{ refresh_interval | default('5s') }}",
+        "derived_source_enabled": {{ derived_source_enabled | default(true) | tojson }},
+        "approximate_graph_build_threshold": {{ approximate_graph_build_threshold | default(10000) | int }}
+    }
+}

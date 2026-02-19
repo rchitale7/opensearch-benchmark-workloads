@@ -13,9 +13,12 @@ import logging
 
 def register(registry):
     register_runners(registry)
-    # Register random-vector param-sources
     registry.register_param_source("random-vector-bulk-param-source", RandomBulkParamSource)
     registry.register_param_source("random-vector-search-param-source", RandomSearchParamSource)
+    registry.register_param_source("multi-tenant-bulk-param-source", MultiTenantBulkParamSource)
+    registry.register_param_source("multi-tenant-search-param-source", MultiTenantSearchParamSource)
+    registry.register_param_source("multi-tenant-setup-param-source", MultiTenantSetupParamSource)
+    registry.register_runner("multi-tenant-create-indices", MultiTenantCreateIndicesRunner(), async_runner=True)
 
 
 class RandomBulkParamSource(ParamSource):
@@ -81,3 +84,152 @@ class RandomSearchParamSource(ParamSource):
                 }
             }
         }
+
+
+class MultiTenantBulkParamSource(ParamSource):
+    """Distributes bulk indexing across N tenant indexes with random vectors.
+    Tracks per-tenant doc counts and signals completion when all tenants reach vectors_per_tenant."""
+
+    def __init__(self, workload, params, **kwargs):
+        super().__init__(workload, params, **kwargs)
+        self._num_tenants = params.get("num_tenants", 32)
+        self._index_prefix = params.get("index_prefix", "tenant_index")
+        self._bulk_size = params.get("bulk-size", 100)
+        self._field = params.get("field", "target_field")
+        self._dims = params.get("dims", 256)
+        self._vectors_per_tenant = params.get("vectors_per_tenant", 600000)
+        self._total_vectors = self._num_tenants * self._vectors_per_tenant
+        self._vectors_sent = 0
+
+    def partition(self, partition_index, total_partitions):
+        return self
+
+    def params(self):
+        if self._vectors_sent >= self._total_vectors:
+            raise StopIteration()
+
+        tenant_id = random.randint(0, self._num_tenants - 1)
+        index_name = f"{self._index_prefix}_{tenant_id}"
+
+        bulk_data = []
+        for _ in range(self._bulk_size):
+            vec = np.random.rand(self._dims).tolist()
+            bulk_data.append({"index": {"_index": index_name}})
+            bulk_data.append({self._field: vec})
+
+        self._vectors_sent += self._bulk_size
+
+        return {
+            "body": bulk_data,
+            "bulk-size": self._bulk_size,
+            "action-metadata-present": True,
+            "unit": "docs",
+            "index": index_name,
+            "type": "",
+        }
+
+
+class MultiTenantSearchParamSource(ParamSource):
+    """Distributes knn search queries across N tenant indexes with random query vectors."""
+
+    def __init__(self, workload, params, **kwargs):
+        super().__init__(workload, params, **kwargs)
+        self._num_tenants = params.get("num_tenants", 32)
+        self._index_prefix = params.get("index_prefix", "tenant_index")
+        self._dims = params.get("dims", 256)
+        self._k = params.get("k", 100)
+        self._field = params.get("field", "target_field")
+
+    def partition(self, partition_index, total_partitions):
+        return self
+
+    def params(self):
+        tenant_id = random.randint(0, self._num_tenants - 1)
+        index_name = f"{self._index_prefix}_{tenant_id}"
+        query_vec = np.random.rand(self._dims).tolist()
+
+        return {
+            "index": index_name,
+            "cache": False,
+            "size": self._k,
+            "body": {
+                "query": {
+                    "knn": {
+                        self._field: {
+                            "vector": query_vec,
+                            "k": self._k
+                        }
+                    }
+                }
+            },
+            "detailed-results": True,
+        }
+
+
+class MultiTenantSetupParamSource(ParamSource):
+    """Provides params for multi-tenant index creation."""
+
+    def __init__(self, workload, params, **kwargs):
+        super().__init__(workload, params, **kwargs)
+        self._params = params
+
+    def partition(self, partition_index, total_partitions):
+        return self
+
+    def params(self):
+        return self._params
+
+
+class MultiTenantCreateIndicesRunner:
+    """Creates N tenant indexes with knn vector field configuration."""
+
+    async def __call__(self, opensearch, params):
+        num_tenants = params.get("num_tenants", 32)
+        index_prefix = params.get("index_prefix", "tenant_index")
+
+        # Build index body from workload params
+        index_cfg = {
+            "knn": True,
+            "number_of_shards": params.get("target_index_primary_shards", 6),
+            "number_of_replicas": params.get("target_index_replica_shards", 2),
+            "refresh_interval": params.get("refresh_interval", "5s"),
+        }
+        if params.get("derived_source_enabled", False):
+            index_cfg["knn.derived_source.enabled"] = True
+        if params.get("approximate_graph_build_threshold") is not None:
+            index_cfg["knn.advanced.approximate_threshold"] = params.get("approximate_graph_build_threshold")
+
+        index_settings = {
+            "settings": {
+                "index": index_cfg
+            },
+            "mappings": {
+                "properties": {
+                    params.get("field", "target_field"): {
+                        "type": "knn_vector",
+                        "dimension": params.get("dims", 256),
+                        "mode": params.get("mode", "on_disk"),
+                        "compression_level": params.get("compression_level", "32x"),
+                        "method": {
+                            "name": "hnsw",
+                            "space_type": params.get("target_index_space_type", "innerproduct"),
+                            "engine": "faiss",
+                            "parameters": {
+                                "ef_construction": params.get("hnsw_ef_construction", 512),
+                                "ef_search": params.get("hnsw_ef_search", 100)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for i in range(num_tenants):
+            index_name = f"{index_prefix}_{i}"
+            await opensearch.indices.delete(index=index_name, ignore=[404])
+            await opensearch.indices.create(index=index_name, body=index_settings)
+
+        return {"success": True, "weight": 1, "unit": "ops"}
+
+    def __repr__(self):
+        return "multi-tenant-create-indices"

@@ -114,4 +114,13 @@
     "schedule": [
        {{ benchmark.collect(parts="common/random-search-only-schedule.json") }}
     ]
+},
+{
+    "name": "multi-tenant-index-and-search",
+    "description": "Multi-tenant: create N indexes and run parallel indexing + search across all tenants",
+    "default": false,
+    "schedule": [
+       {{ benchmark.collect(parts="multi_tenant/setup-schedule.json") }},
+       {{ benchmark.collect(parts="multi_tenant/index-and-search-schedule.json") }}
+    ]
 }

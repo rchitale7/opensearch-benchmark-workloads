@@ -1,0 +1,42 @@
+{
+    "parallel": {
+        "completed-by": "multi-tenant-indexing",
+        "tasks": [
+            {
+                "operation": {
+                    "name": "multi-tenant-indexing",
+                    "operation-type": "bulk",
+                    "param-source": "multi-tenant-bulk-param-source",
+                    "num_tenants": {{ num_tenants | default(32) | int }},
+                    "index_prefix": "tenant_index",
+                    "field": "{{ target_field_name | default('target_field') }}",
+                    "dims": {{ target_index_dimension | default(256) | int }},
+                    "bulk-size": {{ target_index_bulk_size | default(100) }},
+                    "vectors_per_tenant": {{ vectors_per_tenant | default(600000) | int }},
+                    "detailed-results": true
+                },
+                "clients": {{ indexing_clients | default(16) | int }}
+                {%- if index_target_throughput is defined and index_target_throughput > 0 %}
+                ,"target-throughput": {{ index_target_throughput | int }}
+                {%- endif %}
+            },
+            {
+                "operation": {
+                    "name": "multi-tenant-search",
+                    "operation-type": "search",
+                    "param-source": "multi-tenant-search-param-source",
+                    "num_tenants": {{ num_tenants | default(32) | int }},
+                    "index_prefix": "tenant_index",
+                    "field": "{{ target_field_name | default('target_field') }}",
+                    "dims": {{ target_index_dimension | default(256) | int }},
+                    "k": {{ query_k | default(100) | int }},
+                    "detailed-results": true
+                },
+                "clients": {{ search_clients | default(16) | int }}
+                {%- if search_target_throughput is defined and search_target_throughput > 0 %}
+                ,"target-throughput": {{ search_target_throughput | int }}
+                {%- endif %}
+            }
+        ]
+    }
+}
