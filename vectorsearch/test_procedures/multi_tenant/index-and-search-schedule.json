@@ -13,11 +13,10 @@
                     "dims": {{ target_index_dimension | default(256) | int }},
                     "bulk-size": {{ target_index_bulk_size | default(100) }},
                     "vectors_per_tenant": {{ vectors_per_tenant | default(600000) | int }},
-                    "indexing_clients": {{ indexing_clients | default(8) | int }},
                     "detailed-results": true
                 },
-                "clients": {{ indexing_clients | default(8) | int }},
-                "iterations": {{ ((vectors_per_tenant | default(600000) | int) / (target_index_bulk_size | default(100) | int) * (num_tenants | default(32) | int) / (indexing_clients | default(8) | int)) | int }}
+                "clients": {{ num_tenants | default(32) | int }},
+                "iterations": {{ ((vectors_per_tenant | default(600000) | int) / (target_index_bulk_size | default(100) | int)) | int }}
                 {%- if index_target_throughput is defined and index_target_throughput > 0 %}
                 ,"target-throughput": {{ index_target_throughput }}
                 {%- endif %}
@@ -32,10 +31,9 @@
                     "field": "{{ target_field_name | default('target_field') }}",
                     "dims": {{ target_index_dimension | default(256) | int }},
                     "k": {{ query_k | default(100) | int }},
-                    "search_clients": {{ search_clients | default(8) | int }},
                     "detailed-results": true
                 },
-                "clients": {{ search_clients | default(8) | int }}
+                "clients": {{ num_tenants | default(32) | int }}
                 {%- if search_target_throughput is defined and search_target_throughput > 0 %}
                 ,"target-throughput": {{ search_target_throughput }}
                 {%- endif %}

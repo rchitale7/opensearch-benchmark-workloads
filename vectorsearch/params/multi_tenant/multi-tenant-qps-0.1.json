@@ -17,12 +17,10 @@
 
     "num_tenants": 32,
     "vectors_per_tenant": 600000,
+    "target_index_bulk_size": 20,
 
-    "target_index_bulk_size": 100,
-    "indexing_clients": 8,
     "index_target_throughput": 0,
 
     "query_k": 100,
-    "search_clients": 8,
-    "search_target_throughput": 0.4
+    "search_target_throughput": 3.2
 }

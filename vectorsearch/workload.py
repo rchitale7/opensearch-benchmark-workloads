@@ -88,7 +88,7 @@ class RandomSearchParamSource(ParamSource):
 
 class MultiTenantBulkParamSource(ParamSource):
     """Distributes bulk indexing across N tenant indexes with random vectors.
-    Each client round-robins across its assigned indexes."""
+    One client per tenant index."""
 
     def __init__(self, workload, params, **kwargs):
         super().__init__(workload, params, **kwargs)
@@ -98,35 +98,25 @@ class MultiTenantBulkParamSource(ParamSource):
         self._field = params.get("field", "target_field")
         self._dims = params.get("dims", 256)
         self._vectors_per_tenant = params.get("vectors_per_tenant", 600000)
-        self._num_clients = params.get("indexing_clients", 8)
-        self._assigned_indexes = []
-        self._index_vectors = {}
-        self._current = 0
+        self._vectors_sent = 0
+        self._tenant_id = 0
 
     def partition(self, partition_index, total_partitions):
-        local_index = partition_index % self._num_clients
-        self._assigned_indexes = [
-            t for t in range(self._num_tenants) if t % self._num_clients == local_index
-        ]
-        self._index_vectors = {t: 0 for t in self._assigned_indexes}
+        self._tenant_id = partition_index % self._num_tenants
         return self
 
     def params(self):
-        active = [t for t in self._assigned_indexes if self._index_vectors[t] < self._vectors_per_tenant]
-        if not active:
+        if self._vectors_sent >= self._vectors_per_tenant:
             raise StopIteration()
 
-        idx = active[self._current % len(active)]
-        self._current += 1
-        index_name = f"{self._index_prefix}_{idx}"
-
+        index_name = f"{self._index_prefix}_{self._tenant_id}"
         bulk_data = []
         for _ in range(self._bulk_size):
             vec = np.random.rand(self._dims).tolist()
             bulk_data.append({"index": {"_index": index_name}})
             bulk_data.append({self._field: vec})
 
-        self._index_vectors[idx] += self._bulk_size
+        self._vectors_sent += self._bulk_size
 
         return {
             "body": bulk_data,
@@ -139,7 +129,7 @@ class MultiTenantBulkParamSource(ParamSource):
 
 
 class MultiTenantSearchParamSource(ParamSource):
-    """Distributes knn search queries across assigned tenant indexes."""
+    """Distributes knn search queries. One client per tenant index."""
 
     def __init__(self, workload, params, **kwargs):
         super().__init__(workload, params, **kwargs)
@@ -148,21 +138,14 @@ class MultiTenantSearchParamSource(ParamSource):
         self._dims = params.get("dims", 256)
         self._k = params.get("k", 100)
         self._field = params.get("field", "target_field")
-        self._num_clients = params.get("search_clients", 8)
-        self._assigned_indexes = []
-        self._current = 0
+        self._tenant_id = 0
 
     def partition(self, partition_index, total_partitions):
-        local_index = partition_index % self._num_clients
-        self._assigned_indexes = [
-            t for t in range(self._num_tenants) if t % self._num_clients == local_index
-        ]
+        self._tenant_id = partition_index % self._num_tenants
         return self
 
     def params(self):
-        idx = self._assigned_indexes[self._current % len(self._assigned_indexes)]
-        self._current += 1
-        index_name = f"{self._index_prefix}_{idx}"
+        index_name = f"{self._index_prefix}_{self._tenant_id}"
         query_vec = np.random.rand(self._dims).tolist()
 
         return {

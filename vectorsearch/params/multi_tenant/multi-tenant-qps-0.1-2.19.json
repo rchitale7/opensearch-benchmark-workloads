@@ -13,7 +13,7 @@
     "hnsw_ef_search": 100,
     "approximate_graph_build_threshold": 10000,
     "refresh_interval": "5s",
-    "derived_source_enabled": true,
+    "derived_source_enabled": false,
 
     "num_tenants": 32,
     "vectors_per_tenant": 600000,
@@ -22,5 +22,5 @@
     "index_target_throughput": 0,
 
     "query_k": 100,
-    "search_target_throughput": 32
+    "search_target_throughput": 3.2
 }
