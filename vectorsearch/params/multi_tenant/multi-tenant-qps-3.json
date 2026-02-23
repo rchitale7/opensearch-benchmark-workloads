@@ -22,5 +22,5 @@
     "index_target_throughput": 0,
 
     "query_k": 100,
-    "search_target_throughput": 96
+    "search_target_throughput": 3
 }
