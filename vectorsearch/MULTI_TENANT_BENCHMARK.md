@@ -55,32 +55,33 @@ The number of tenants is configurable. However, any modification to the number o
 
 ## Setting Throughput
 
-### How I think target-throughput works
+### How target-throughput works
 
-`target-throughput` in OSB is assumed to be **per client**. With 1:1 client-to-tenant mapping (32 clients = 32 tenants), the values map directly to per-tenant rates. For ingestion, it is assumed to be the rate of docs/s ingested. For search, it is assumed to be
-the rate of queries/s. 
+`target-throughput` in OSB is the **total** rate across all clients. OSB divides it by the number of clients to get the per-client rate (see `UnitAwareScheduler` in `osbenchmark/worker_coordinator/scheduler.py`).
 
-However, I am not 100% sure on this. This needs some more testing to understand what's happening. 
+With 1:1 client-to-tenant mapping: **per-tenant rate = target-throughput / num_tenants**.
+
+For indexing, the unit is `docs/s` (rendered as `"X docs/s"` in the schedule). For search, the unit is `ops/s` (rendered as `"X ops/s"` in the schedule).
 
 ### Search QPS
 
-`search_target_throughput` = desired QPS per tenant.
+`search_target_throughput` = desired QPS per tenant × num_tenants.
 
-| Per-tenant QPS | search_target_throughput |
+| Per-tenant QPS | search_target_throughput (32 tenants) |
 |---|---|
-| 0.1 | 0.1 |
-| 1 | 1 |
-| 3 | 3 |
+| 0.1 | 3.2 |
+| 1 | 32 |
+| 3 | 96 |
 
 ### Ingestion TPS
 
-`index_target_throughput` = desired ingestion TPS per tenant.
+`index_target_throughput` = desired docs/s per tenant × num_tenants. Set to 0 for unthrottled.
 
-| Per-tenant TPS | index_target_throughput |
+| Per-tenant docs/s | index_target_throughput (32 tenants) |
 |---|---|
-| 60 | 60 |
-| 80 | 80 |
-| 125 | 125 |
+| 60 | 1920 |
+| 80 | 2560 |
+| 125 | 4000 |
 
 ## Reading Results
 

@@ -18,7 +18,7 @@
                 "clients": {{ num_tenants | default(32) | int }},
                 "iterations": {{ ((vectors_per_tenant | default(600000) | int) / (target_index_bulk_size | default(100) | int)) | int }}
                 {%- if index_target_throughput is defined and index_target_throughput > 0 %}
-                ,"target-throughput": {{ index_target_throughput }}
+                ,"target-throughput": "{{ index_target_throughput }} docs/s"
                 {%- endif %}
             },
             {
@@ -33,9 +33,10 @@
                     "k": {{ query_k | default(100) | int }},
                     "detailed-results": true
                 },
-                "clients": {{ num_tenants | default(32) | int }}
+                "clients": {{ num_tenants | default(32) | int }},
+                "iterations": 2147483647
                 {%- if search_target_throughput is defined and search_target_throughput > 0 %}
-                ,"target-throughput": {{ search_target_throughput }}
+                ,"target-throughput": "{{ search_target_throughput }} ops/s"
                 {%- endif %}
             }
         ]
