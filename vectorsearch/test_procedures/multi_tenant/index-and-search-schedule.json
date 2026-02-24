@@ -34,7 +34,7 @@
                     "detailed-results": true
                 },
                 "clients": {{ num_tenants | default(32) | int }},
-                "iterations": 2147483647
+                "time-period": 864000
                 {%- if search_target_throughput is defined and search_target_throughput > 0 %}
                 ,"target-throughput": "{{ search_target_throughput }} ops/s"
                 {%- endif %}
