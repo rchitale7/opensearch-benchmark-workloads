@@ -6,6 +6,30 @@
 - Access to an OpenSearch domain (2.19 or 3.3)
 - The workload code from [this branch](https://github.com/rchitale7/opensearch-benchmark-workloads/tree/rchital)
 
+### OSB Bug Workaround (required for OSB 2.1.0)
+
+There is a bug in OSB where `completed-by` causes a crash at the end of the run (`'float' object is not subscriptable`). Apply this one-line patch to your OSB installation:
+
+In `osbenchmark/worker_coordinator/worker_coordinator.py`, find:
+```python
+        if completed:
+            progress = 1.0
+        elif runner_task_progress is not None:
+```
+
+Change `progress = 1.0` to `progress = (1.0, '%')`:
+```python
+        if completed:
+            progress = (1.0, '%')
+        elif runner_task_progress is not None:
+```
+
+Or apply via sed:
+```bash
+sed -i 's/            progress = 1\.0$/            progress = (1.0, "%")/' \
+  $(python3 -c "import osbenchmark; print(osbenchmark.__path__[0])")/worker_coordinator/worker_coordinator.py
+```
+
 ## Quick Start
 
 ### 1. Smoke Test (verify setup)
@@ -41,13 +65,13 @@ opensearch-benchmark run \
 
 ## Params Files
 
-| File | QPS/tenant | Vectors/tenant | Version | Notes |
-|---|---|---|---|---|
-| `multi-tenant-smoke-test.json` | 0.1 | 1,000 | 3.3 | Quick validation |
-| `multi-tenant-qps-0.1.json` | 0.1 | 600,000 | 3.3 | Primary comparison |
-| `multi-tenant-qps-1.json` | 1 | 600,000 | 3.3 | |
-| `multi-tenant-qps-3.json` | 3 | 600,000 | 3.3 | |
-| `multi-tenant-qps-0.1-2.19.json` | 0.1 | 600,000 | 2.19 | No derived_source |
+| File | QPS/tenant | search_target_throughput | Vectors/tenant | Version | Notes |
+|---|---|---|---|---|---|
+| `multi-tenant-smoke-test.json` | 0.1 | 3.2 | 1,000 | 3.3 | Quick validation |
+| `multi-tenant-qps-0.1.json` | 0.1 | 3.2 | 600,000 | 3.3 | Primary comparison |
+| `multi-tenant-qps-1.json` | 1 | 32 | 600,000 | 3.3 | |
+| `multi-tenant-qps-3.json` | 3 | 96 | 600,000 | 3.3 | |
+| `multi-tenant-qps-0.1-2.19.json` | 0.1 | 3.2 | 600,000 | 2.19 | No derived_source |
 
 All files use: 32 tenants, bulk size 20, 32 indexing + 32 search clients (1:1 client-to-tenant mapping).
 
